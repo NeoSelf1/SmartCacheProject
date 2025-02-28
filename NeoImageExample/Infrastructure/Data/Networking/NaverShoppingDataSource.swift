@@ -10,7 +10,6 @@ class NaverShoppingDataSource {
         self.clientID = EnvironmentVar().clientID
         self.clientSecret = EnvironmentVar().clientSecret
         self.session = session
-        print(clientID, clientSecret)
     }
     
     func searchProducts(
@@ -53,7 +52,6 @@ class NaverShoppingDataSource {
         
         do {
             let (data, response) = try await session.data(for: request)
-            print(String(data:data, encoding: .utf8))
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw APIError.notFound
             }

@@ -38,7 +38,7 @@ public struct NeoImage: View {
     // MARK: - View 구현
     
     public var body: some View {
-        NeoImageViewRepresentable(
+        NeoImageViewRepresenter(
             source: source,
             placeholder: placeholder,
             options: options,
@@ -80,31 +80,6 @@ public struct NeoImage: View {
     public func onFailure(_ action: @escaping (Error) -> Void) -> NeoImage {
         var result = self
         result.onFailure = action
-        return result
-    }
-    
-    /// 이미지 컨텐츠 모드 설정
-    public func resizable(capInsets: EdgeInsets = EdgeInsets(), resizingMode: Image.ResizingMode = .stretch) -> NeoImage {
-        self
-    }
-    
-    /// 이미지 표시 방식 설정
-    public func aspectRatio(_ contentMode: SwiftUI.ContentMode) -> NeoImage {
-        var result = self
-        result.contentMode = contentMode
-        return result
-    }
-    
-    /// 이미지 프레임 설정 모디파이어 추가
-    public func frame(width: CGFloat? = nil, height: CGFloat? = nil) -> NeoImage {
-        var result = self
-        if let width = width, let height = height {
-            result.frame = CGSize(width: width, height: height)
-        } else if let width = width {
-            result.frame = CGSize(width: width, height: 0) // 높이는 자동 계산
-        } else if let height = height {
-            result.frame = CGSize(width: 0, height: height) // 너비는 자동 계산
-        }
         return result
     }
     
@@ -179,20 +154,16 @@ struct NeoImageViewRepresenter: UIViewRepresentable {
             }
         }()
         
-        // 이미지 로딩 시작
         Task {
             do {
-                // 이미지 다운로드 및 설정
                 let result = try await uiView.neo.setImage(with: url, options: options)
                 
-                // 성공 콜백 호출
                 if let onSuccess = onSuccess {
                     await MainActor.run {
                         onSuccess(result)
                     }
                 }
             } catch {
-                // 실패 콜백 호출
                 if let onFailure = onFailure {
                     await MainActor.run {
                         onFailure(error)

@@ -6,6 +6,7 @@ public struct NeoImage: View {
     private let source: Source
     private var placeholder: AnyView?
     private var options: NeoImageOptions
+    private var category: String?
     private var onSuccess: ((ImageLoadingResult) -> Void)?
     private var onFailure: ((Error) -> Void)?
     private var contentMode: SwiftUI.ContentMode
@@ -20,17 +21,19 @@ public struct NeoImage: View {
     // MARK: - Initializers
     
     /// URL로 초기화
-    public init(url: URL?) {
+    public init(url: URL?, category: String?) {
         self.source = .url(url)
         self.options = .default
+        self.category = category
         self.contentMode = .fill
         self.frame = nil
     }
     
     /// URL 문자열로 초기화
-    public init(urlString: String?) {
+    public init(urlString: String?, category: String?) {
         self.source = .urlString(urlString)
         self.options = .default
+        self.category = category
         self.contentMode = .fill
         self.frame = nil
     }
@@ -42,6 +45,7 @@ public struct NeoImage: View {
             source: source,
             placeholder: placeholder,
             options: options,
+            category: category,
             contentMode: contentMode,
             frame: frame,
             onSuccess: onSuccess,
@@ -50,7 +54,7 @@ public struct NeoImage: View {
         .if(frame != nil) { view in
             view.frame(width: frame?.width, height: frame?.height)
         }
-        .clipped() // 이미지가 경계를 넘지 않도록 클리핑
+        .clipped()
     }
     
     // MARK: - 모디파이어
@@ -114,6 +118,7 @@ struct NeoImageViewRepresenter: UIViewRepresentable {
     let source: NeoImage.Source
     let placeholder: AnyView?
     let options: NeoImageOptions
+    let category: String?
     let contentMode: SwiftUI.ContentMode
     let frame: CGSize?
     let onSuccess: ((ImageLoadingResult) -> Void)?
@@ -156,7 +161,7 @@ struct NeoImageViewRepresenter: UIViewRepresentable {
         
         Task {
             do {
-                let result = try await uiView.neo.setImage(with: url, options: options)
+                let result = try await uiView.neo.setImage(with: url, options: options, category: category)
                 
                 if let onSuccess = onSuccess {
                     await MainActor.run {
@@ -171,34 +176,5 @@ struct NeoImageViewRepresenter: UIViewRepresentable {
                 }
             }
         }
-    }
-}
-
-// MARK: - View Extensions for NeoImage
-
-/// NeoImage 생성을 위한 편의 확장
-public extension View {
-    /// URL로부터 NeoImage를 생성하는 모디파이어
-    func neoImage(url: URL?, placeholder: AnyView? = nil, options: NeoImageOptions = .default) -> some View {
-        let neoImage = NeoImage(url: url)
-            .options(options)
-        
-        if let placeholder = placeholder {
-            return neoImage.placeholder { placeholder }
-        }
-        
-        return neoImage
-    }
-    
-    /// URL 문자열로부터 NeoImage를 생성하는 모디파이어
-    func neoImage(urlString: String?, placeholder: AnyView? = nil, options: NeoImageOptions = .default) -> some View {
-        let neoImage = NeoImage(urlString: urlString)
-            .options(options)
-        
-        if let placeholder = placeholder {
-            return neoImage.placeholder { placeholder }
-        }
-        
-        return neoImage
     }
 }

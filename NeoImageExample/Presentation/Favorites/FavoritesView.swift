@@ -82,7 +82,7 @@ struct FavoriteProductRow: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            NeoImage(url: URL(string:product.image))
+            NeoImage(url: URL(string:product.image), category: product.categories[0])
                 .placeholder {
                     Rectangle()
                         .fill(Color.gray20)

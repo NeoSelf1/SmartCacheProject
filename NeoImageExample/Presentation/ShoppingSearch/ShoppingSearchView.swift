@@ -271,7 +271,7 @@ struct ProductRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             // 상품 이미지
-            NeoImage(urlString: product.image)
+            NeoImage(url: URL(string:product.image), category: product.categories[0])
                 .placeholder {
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))

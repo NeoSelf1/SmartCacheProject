@@ -36,7 +36,8 @@ extension NeoImageWrapper where Base: UIImageView {
     private func setImageAsync(
         with url: URL?,
         placeholder: UIImage? = nil,
-        options: NeoImageOptions? = nil
+        options: NeoImageOptions? = nil,
+        category: String? = nil
     ) async throws -> (ImageLoadingResult, ImageTask?) {
         // 이미지뷰가 실제로 화면에 표시되어 있는지 여부 파악,
         // 이는 Swift 6로 오면서 비동기 작업으로 간주되기 시작함.
@@ -111,13 +112,14 @@ extension NeoImageWrapper where Base: UIImageView {
         let downloadResult = try await ImageDownloadManager.shared.downloadImage(with: url)
         print("\(url): 이미지 다운로드 완료")
         try Task.checkCancellation()
-
+        
+        
         let processedImage = try await processImage(downloadResult.image, options: options)
         try Task.checkCancellation()
 
         // 캐시 저장
         if let data = processedImage.jpegData(compressionQuality: 0.8) {
-            try await ImageCache.shared.smartStore(data, forKey: url.absoluteString)
+            try await ImageCache.shared.smartStore(data, forKey: url.absoluteString, with: category)
             print("\(url): 이미지 캐싱 완료")
         }
 
@@ -149,12 +151,14 @@ extension NeoImageWrapper where Base: UIImageView {
     public func setImage(
         with url: URL?,
         placeholder: UIImage? = nil,
-        options: NeoImageOptions? = nil
+        options: NeoImageOptions? = nil,
+        category: String? = nil
     ) async throws -> ImageLoadingResult {
         let (result, _) = try await setImageAsync(
             with: url,
             placeholder: placeholder,
-            options: options
+            options: options,
+            category: category
         )
 
         return result

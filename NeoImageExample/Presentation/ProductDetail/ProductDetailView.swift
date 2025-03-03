@@ -82,7 +82,7 @@ struct ProductDetailView: View {
     // 상품 상세 정보 컨텐츠
     private func productDetailContent(_ product: Product) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            NeoImage(urlString: product.image)
+            NeoImage(url: URL(string:product.image), category: product.categories[0])
                 .placeholder {
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))
@@ -228,7 +228,7 @@ struct SimilarProductCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            NeoImage(urlString: product.image)
+            NeoImage(url: URL(string:product.image), category: product.categories[0])
                 .placeholder {
                     Rectangle()
                         .fill(Color.gray.opacity(0.2))

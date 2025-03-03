@@ -78,24 +78,11 @@ public final class ImageCache: @unchecked Sendable {
     public func smartStore(
         _ data: Data,
         forKey key: String,
-        expiration: StorageExpiration? = nil
+        expiration: StorageExpiration? = nil,
+        with category: String?
     ) async throws {
-        let category: ImageCategory
 
-        if let image = UIImage(data: data) {
-            do {
-                category = try await ImageClassifier.shared.classifyImage(image)
-            } catch {
-                print("이미지 분류 실패: \(error)")
-                category = .unknown
-            }
-        } else {
-            print("no Image")
-            category = .unknown
-        }
-
-        print(category.rawValue)
-
+//        category
         await memoryStorage.store(value: data, forKey: key, expiration: expiration)
 
         try await diskStorage.store(

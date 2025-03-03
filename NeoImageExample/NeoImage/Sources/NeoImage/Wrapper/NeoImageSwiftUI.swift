@@ -119,8 +119,8 @@ struct NeoImageViewRepresenter: UIViewRepresentable {
     let onSuccess: ((ImageLoadingResult) -> Void)?
     let onFailure: ((Error) -> Void)?
     
-    @State private var imageTask: ImageTask?
-    
+    @State private var loadedURL: URL?
+    @State private var imageTask: Task<Void, Never>?
     
     func makeUIView(context: Context) -> UIImageView {
         let imageView = UIImageView()
@@ -141,37 +141,41 @@ struct NeoImageViewRepresenter: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: UIImageView, context: Context) {
-        // URL 추출
-        let url: URL? = {
-            switch source {
-            case .url(let url):
-                return url
-            case .urlString(let string):
-                if let string = string {
-                    return URL(string: string)
-                }
-                return nil
-            }
-        }()
-        
-        Task {
-            do {
-                let result = try await uiView.neo.setImage(with: url, options: options)
-                
-                if let onSuccess = onSuccess {
-                    await MainActor.run {
-                        onSuccess(result)
+            let url: URL? = {
+                switch source {
+                case .url(let url):
+                    return url
+                case .urlString(let string):
+                    if let string = string {
+                        return URL(string: string)
                     }
+                    return nil
                 }
-            } catch {
-                if let onFailure = onFailure {
-                    await MainActor.run {
-                        onFailure(error)
+            }()
+            
+            if url != loadedURL {
+                imageTask?.cancel()
+                
+                imageTask = Task {
+                    do {
+                        let result = try await uiView.neo.setImage(with: url, options: options)
+
+                        if !Task.isCancelled, let onSuccess = onSuccess {
+                            await MainActor.run {
+                                loadedURL = url
+                                onSuccess(result)
+                            }
+                        }
+                    } catch {
+                        if !Task.isCancelled, let onFailure = onFailure {
+                            await MainActor.run {
+                                onFailure(error)
+                            }
+                        }
                     }
                 }
             }
         }
-    }
 }
 
 // MARK: - View Extensions for NeoImage

@@ -9,7 +9,6 @@ public struct NeoImage: View {
     private var onSuccess: ((ImageLoadingResult) -> Void)?
     private var onFailure: ((Error) -> Void)?
     private var contentMode: SwiftUI.ContentMode
-    private var frame: CGSize? // 명시적인 프레임 크기 추가
     
     /// 이미지 소스를 나타내는 열거형
     public enum Source {
@@ -24,7 +23,6 @@ public struct NeoImage: View {
         self.source = .url(url)
         self.options = .default
         self.contentMode = .fill
-        self.frame = nil
     }
     
     /// URL 문자열로 초기화
@@ -32,7 +30,6 @@ public struct NeoImage: View {
         self.source = .urlString(urlString)
         self.options = .default
         self.contentMode = .fill
-        self.frame = nil
     }
     
     // MARK: - View 구현
@@ -43,13 +40,9 @@ public struct NeoImage: View {
             placeholder: placeholder,
             options: options,
             contentMode: contentMode,
-            frame: frame,
             onSuccess: onSuccess,
             onFailure: onFailure
         )
-        .if(frame != nil) { view in
-            view.frame(width: frame?.width, height: frame?.height)
-        }
         .clipped() // 이미지가 경계를 넘지 않도록 클리핑
     }
     
@@ -115,7 +108,6 @@ struct NeoImageViewRepresenter: UIViewRepresentable {
     let placeholder: AnyView?
     let options: NeoImageOptions
     let contentMode: SwiftUI.ContentMode
-    let frame: CGSize?
     let onSuccess: ((ImageLoadingResult) -> Void)?
     let onFailure: ((Error) -> Void)?
     

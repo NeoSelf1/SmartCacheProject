@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E53C91182D7587FF002BF540 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = E53C91172D7587FF002BF540 /* Kingfisher */; };
 		E5DA40252D719633006E742B /* NeoImage in Frameworks */ = {isa = PBXBuildFile; productRef = E5DA40242D719633006E742B /* NeoImage */; };
 		E5DA40272D719778006E742B /* ProductEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DA40262D719778006E742B /* ProductEntity.swift */; };
 		E5DA402A2D71978F006E742B /* NeoImageExample.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = E5DA40282D71978F006E742B /* NeoImageExample.xcdatamodeld */; };
@@ -67,6 +68,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E53C91182D7587FF002BF540 /* Kingfisher in Frameworks */,
 				E5DA40252D719633006E742B /* NeoImage in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -88,6 +90,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E53C90CE2D75878B002BF540 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				E5DA40DE2D71ED9C006E742B /* Secrets.xcconfig */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		E540400B2D718EF300D11215 = {
 			isa = PBXGroup;
 			children = (
@@ -98,6 +108,7 @@
 				E54040162D718EF300D11215 /* NeoImageExample */,
 				E5DA40232D719633006E742B /* Frameworks */,
 				E54040152D718EF300D11215 /* Products */,
+				E53C90CE2D75878B002BF540 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -139,6 +150,7 @@
 			name = NeoImageExample;
 			packageProductDependencies = (
 				E5DA40242D719633006E742B /* NeoImage */,
+				E53C91172D7587FF002BF540 /* Kingfisher */,
 			);
 			productName = NeoImageExample;
 			productReference = E54040142D718EF300D11215 /* NeoImageExample.app */;
@@ -218,6 +230,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				E540407D2D71919F00D11215 /* XCLocalSwiftPackageReference "NeoImageExample/NeoImage" */,
+				E53C91162D7587FF002BF540 /* XCRemoteSwiftPackageReference "Kingfisher" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E54040152D718EF300D11215 /* Products */;
@@ -603,7 +616,23 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		E53C91162D7587FF002BF540 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/onevcat/Kingfisher";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		E53C91172D7587FF002BF540 /* Kingfisher */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E53C91162D7587FF002BF540 /* XCRemoteSwiftPackageReference "Kingfisher" */;
+			productName = Kingfisher;
+		};
 		E5DA40242D719633006E742B /* NeoImage */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E540407D2D71919F00D11215 /* XCLocalSwiftPackageReference "NeoImageExample/NeoImage" */;

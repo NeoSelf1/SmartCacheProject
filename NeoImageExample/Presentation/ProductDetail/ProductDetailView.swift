@@ -6,26 +6,20 @@ struct ProductDetailView: View {
     
     @Environment(\.presentationMode) var presentationMode
     
-    init(productId: String) {
-        _viewModel = StateObject(wrappedValue: ProductDetailViewModel(productId: productId))
+    init(product: Product) {
+        _viewModel = StateObject(wrappedValue: ProductDetailViewModel(product: product))
     }
     
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // 네비게이션 헤더
                 navigationHeader
                 
                 if viewModel.isLoading {
                     ProgressView("상품 정보를 불러오는 중...")
                         .padding(.top, 50)
-                } else if let product = viewModel.product {
-                    // 상품 상세 정보
-                    productDetailContent(product)
                 } else {
-                    Text("상품 정보를 불러올 수 없습니다.")
-                        .foregroundColor(.gray)
-                        .padding(.top, 50)
+                    productDetailContent(viewModel.product)
                 }
             }
         }
@@ -70,9 +64,7 @@ struct ProductDetailView: View {
             .padding(.trailing, 8)
             
             Button(action: {
-                if let product = viewModel.product {
-                    viewModel.toggleFavorite()
-                }
+                viewModel.toggleFavorite()
             }) {
                 Image(systemName: viewModel.isFavorite ? "heart.fill" : "heart")
                     .font(.system(size: 20))
@@ -90,7 +82,16 @@ struct ProductDetailView: View {
     // 상품 상세 정보 컨텐츠
     private func productDetailContent(_ product: Product) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            productImageSection(product)
+            NeoImage(urlString: product.image)
+                .placeholder {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                        .overlay(
+                            ProgressView()
+                        )
+                }
+                .fade(duration: 0.5)
+                .frame(height: 300)
             
             VStack(alignment: .leading, spacing: 16) {
                 
@@ -101,17 +102,14 @@ struct ProductDetailView: View {
                         .font(.title3)
                         .fontWeight(.bold)
                     
-                    // 가격 정보
                     priceInfoSection(product)
                 }
                 .padding(.horizontal, 16)
                 
                 Divider()
                 
-                // 상품 카테고리
                 categoryInfoSection(product)
                 
-                // 상품 정보 (제조사, 브랜드)
                 if !product.brand.isEmpty {
                     Divider()
                     
@@ -135,29 +133,23 @@ struct ProductDetailView: View {
                 
                 Divider()
                 
-                // 유사 상품 섹션
                 similarProductsSection
                 
-                // 하단 버튼
-                bottomButtons(product)
+                    Button(action: {
+                        viewModel.toggleFavorite()
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: viewModel.isFavorite ? "heart.fill" : "heart")
+                                .font(.system(size: 24))
+                            
+                            Text("찜하기")
+                                .font(.caption)
+                        }
+                        .foregroundColor(viewModel.isFavorite ? .red : .primary)
+                        .frame(width: 60)
+                    }
+                
             }
-        }
-    }
-    
-    // 상품 이미지 섹션
-    private func productImageSection(_ product: Product) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            NeoImage(urlString: product.image)
-                .placeholder {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                        .overlay(
-                            ProgressView()
-                        )
-                }
-                .fade(duration: 0.5)
-                .frame(height: 300)
-                .clipped()
         }
     }
     
@@ -189,7 +181,12 @@ struct ProductDetailView: View {
             // 카테고리 경로
             HStack {
                 ForEach(product.categories, id: \.self){ category in
-                    CategoryLabel(text: category)
+                    Text(category)
+                        .font(.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(4)
                 }
             }
             .padding(.horizontal, 2)
@@ -210,7 +207,7 @@ struct ProductDetailView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
                         ForEach(viewModel.similarProducts) { product in
-                            NavigationLink(destination: ProductDetailView(productId: product.id)) {
+                            NavigationLink(destination: ProductDetailView(product: product)) {
                                 SimilarProductCard(product: product)
                                     .frame(width: 150)
                             }
@@ -223,41 +220,6 @@ struct ProductDetailView: View {
         }
     }
     
-    // 하단 버튼 섹션
-    private func bottomButtons(_ product: Product) -> some View {
-        HStack(spacing: 16) {
-            Button(action: {
-                viewModel.toggleFavorite()
-            }) {
-                VStack(spacing: 4) {
-                    Image(systemName: viewModel.isFavorite ? "heart.fill" : "heart")
-                        .font(.system(size: 24))
-                    
-                    Text("찜하기")
-                        .font(.caption)
-                }
-                .foregroundColor(viewModel.isFavorite ? .red : .primary)
-                .frame(width: 60)
-            }
-        }
-        .padding(16)
-        .background(Color.white)
-        .shadow(color: Color.black.opacity(0.1), radius: 5, y: -2)
-    }
-}
-
-// 카테고리 라벨 컴포넌트
-struct CategoryLabel: View {
-    let text: String
-    
-    var body: some View {
-        Text(text)
-            .font(.caption)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.gray.opacity(0.1))
-            .cornerRadius(4)
-    }
 }
 
 // 유사 상품 카드 컴포넌트

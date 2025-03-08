@@ -11,13 +11,11 @@ import NeoImage
 
 struct ShoppingSearchView: View {
     @StateObject var viewModel = ShoppingViewModel()
-    // 검색 시 키보드가 사라지도록 FocusState 사용
     @FocusState private var isSearchFocused: Bool
     
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                // 검색 헤더
                 searchHeader
                 
                 // 정렬 옵션
@@ -45,7 +43,6 @@ struct ShoppingSearchView: View {
         }
     }
     
-    // 검색 헤더
     private var searchHeader: some View {
         VStack(spacing: 8) {
             HStack {
@@ -150,7 +147,6 @@ struct ShoppingSearchView: View {
         .background(Color.white)
     }
     
-    // 최근 검색어 뷰
     private var recentSearchesView: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -236,7 +232,7 @@ struct ShoppingSearchView: View {
     private var searchResultsList: some View {
         List {
             ForEach(viewModel.products) { product in
-                NavigationLink(destination: ProductDetailView(productId: product.id)) {
+                NavigationLink(destination: ProductDetailView(product: product)) {
                     ProductRow(product: product)
                 }
                 .onAppear {

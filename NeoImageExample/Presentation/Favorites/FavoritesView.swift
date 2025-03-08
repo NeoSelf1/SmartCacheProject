@@ -73,36 +73,6 @@ struct FavoritesView: View {
 //            .padding(16)
 //        }
 //    }
-    
-    // 찜한 상품이 없을 때 표시할 뷰
-    private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "heart.slash")
-                .font(.system(size: 64))
-                .foregroundColor(.gray40)
-            
-            Text("No favorites yet")
-                .font(._headline)
-                .foregroundColor(.gray80)
-            
-            Text("Products you like will appear here")
-                .font(._body1)
-                .foregroundColor(.gray60)
-                .multilineTextAlignment(.center)
-            
-            NavigationLink(destination: MainTabView().environment(\.selectedTab, 0)) {
-                Text("Browse Products")
-                    .font(._subtitle2)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(Color.red50)
-                    .cornerRadius(8)
-            }
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
 // 찜한 상품 행 컴포넌트
@@ -134,7 +104,7 @@ struct FavoriteProductRow: View {
                 
                 HStack {
                     ForEach(product.categories, id: \.self){ category in
-                        CategoryLabel(text: category)
+                        Text(category)
                     }
                 }
             }

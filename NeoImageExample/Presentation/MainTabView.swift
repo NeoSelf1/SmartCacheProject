@@ -10,7 +10,7 @@ struct MainTabView: View {
             VStack(spacing: 0) {
                 switch(selectedTab) {
                 case 0:
-                    ShoppingSearchView()
+                    ImageLoadingPerformanceView()
                 case 1:
                     FavoritesView()
                 default:

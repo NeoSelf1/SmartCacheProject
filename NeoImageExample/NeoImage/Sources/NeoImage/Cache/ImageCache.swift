@@ -48,7 +48,6 @@ public final class ImageCache: @unchecked Sendable {
         // 디스크 캐시에 대한 설정을 여기서 정의해줍니다.
         let diskConfig = DiskStorage<Data>.Config(
             name: name,
-            sizeLimit: 0,
             directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
         )
 
@@ -73,43 +72,7 @@ public final class ImageCache: @unchecked Sendable {
             expiration: expiration
         )
     }
-
-    @ImageCacheActor
-    public func smartStore(
-        _ data: Data,
-        forKey key: String,
-        expiration: StorageExpiration? = nil
-    ) async throws {
-        let category: ImageCategory
-
-        if let image = UIImage(data: data) {
-            do {
-                category = try await ImageClassifier.shared.classifyImage(image)
-            } catch {
-                print("이미지 분류 실패: \(error)")
-                category = .unknown
-            }
-        } else {
-            print("no Image")
-            category = .unknown
-        }
-
-        print(category.rawValue)
-
-        await memoryStorage.store(value: data, forKey: key, expiration: expiration)
-
-        try await diskStorage.store(
-            value: data,
-            forKey: key,
-            expiration: expiration
-        )
-    }
-
-    /// 캐시로부터 저장된 이미지를 가져옵니다.
-    /// 1차적으로 오버헤드가 적은 메모리를 먼저 확인합니다.
-    /// 이후 메모리에 없을 경우, 디스크를 확인합니다.
-    /// 디스크에 없을 경우 throw합니다.
-    /// 디스크에 데이터를 확인할 경우, 다음 조회를 위해 해당 데이터를 메모리로 올립니다.
+    
     public func retrieveImage(forKey key: String) async throws -> Data? {
         if let memoryData = await memoryStorage.value(forKey: key) {
             return memoryData

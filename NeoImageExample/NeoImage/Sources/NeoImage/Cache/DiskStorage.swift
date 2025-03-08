@@ -4,7 +4,6 @@ public class DiskStorage<T: DataTransformable>: @unchecked Sendable {
     private let name: String
     private let fileManager: FileManager
     private let directoryURL: URL
-    
     private var storageReady = true
     
     var maybeCached : Set<String>?
@@ -22,7 +21,7 @@ public class DiskStorage<T: DataTransformable>: @unchecked Sendable {
         self.fileManager = fileManager
         
         let url = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        let cacheName = "com.neoself.NeoImage.ImageCache.\(name)"
+        let cacheName = "com.neon.NeoImage.ImageCache.\(name)"
         
         directoryURL = url.appendingPathComponent(cacheName, isDirectory: true)
         
@@ -153,7 +152,6 @@ public class DiskStorage<T: DataTransformable>: @unchecked Sendable {
 
     /// 디렉토리 내의 모든 파일을 삭제하는 메서드
     func removeAll() async throws {
-        print("disk Cleared: \(directoryURL)")
         try fileManager.removeItem(at: directoryURL)
         try prepareDirectory()
     }
@@ -259,6 +257,7 @@ extension DiskStorage {
         } catch {
             // 만일 디렉토리 생성이 실패할경우, storageReady를 false로 변경합니다.
             // 이는 추후 flag로 동작합니다.
+            print("error creating New Directory")
             storageReady = false
             throw CacheError.cannotCreateDirectory(error)
         }

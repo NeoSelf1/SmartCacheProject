@@ -20,7 +20,7 @@ public class ImageCache: @unchecked Sendable {
     
     // MARK: - Properties
     
-    public let memoryStorage: MemoryStorageActor
+    public let memoryStorage: MemoryStorage
     public let diskStorage: DiskStorage<Data>
     
     // Disk에 대한 접근이 패키지 외부에서 동시에 이루어질 경우, 동일한 위치에 다른 데이터가 덮어씌워지는 data race 상황이 됩니다. 이를 방지하고자, 기존
@@ -41,7 +41,7 @@ public class ImageCache: @unchecked Sendable {
         let totalMemory = ProcessInfo.processInfo.physicalMemory
         let memoryLimit = totalMemory / 4
         
-        memoryStorage = MemoryStorageActor(
+        memoryStorage = MemoryStorage(
             totalCostLimit: min(Int.max, Int(memoryLimit))
         )
         
@@ -75,7 +75,7 @@ public class ImageCache: @unchecked Sendable {
         forKey key: String,
         expiration: StorageExpiration? = nil
     ) async throws {
-        await memoryStorage.store(value: data, forKey: key, expiration: expiration)
+        memoryStorage.store(value: data, forKey: key, expiration: expiration)
         
         try await diskStorage.store(
             value: data,
@@ -85,14 +85,14 @@ public class ImageCache: @unchecked Sendable {
     }
     
     public func retrieveImage(forKey key: String) async throws -> Data? {
-        if let memoryData = await memoryStorage.value(forKey: key) {
+        if let memoryData = memoryStorage.value(forKey: key) {
             return memoryData
         }
         
         let diskData = try await diskStorage.value(forKey: key)
         
         if let diskData {
-            await memoryStorage.store(
+            memoryStorage.store(
                 value: diskData,
                 forKey: key,
                 expiration: .days(7)
@@ -104,15 +104,13 @@ public class ImageCache: @unchecked Sendable {
     
     /// 메모리와 디스크 모두에 존재하는 모든 데이터를 제거합니다.
     public func clearCache() async throws {
-        await memoryStorage.removeAll()
+        memoryStorage.removeAll()
         
         try await diskStorage.removeAll()
     }
     
     @objc public func clearMemoryCache() {
-        Task {
-            await memoryStorage.removeAll()
-        }
+        memoryStorage.removeAll()
     }
     
     @objc func cleanExpiredDiskCache() {

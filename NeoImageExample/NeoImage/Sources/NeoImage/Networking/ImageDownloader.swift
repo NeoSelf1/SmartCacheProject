@@ -25,7 +25,6 @@ public class ImageDownloader: @unchecked Sendable  {
         set { propertyQueue.sync { _downloadTimeout = newValue } }
     }
     
-    
     private let name: String
     private let session: URLSession
     private let taskManager = TaskManager()
@@ -42,7 +41,8 @@ public class ImageDownloader: @unchecked Sendable  {
         session = URLSession(
             configuration: configuration,
             delegate: sessionDelegate,
-            delegateQueue: nil)
+            delegateQueue: nil
+        )
     }
     
     deinit { session.invalidateAndCancel() }
@@ -63,10 +63,39 @@ public class ImageDownloader: @unchecked Sendable  {
         return try await withCheckedThrowingContinuation { continuation in
             // 기존 태스크 확인 (중복 다운로드 방지)
             if let existingTask = sessionDelegate.task(for: context.url) {
+                existingTask.onTaskDone.delegate(on: self) { (_, values) in
+                    let (result, callbacks) = values
+                    let downloadResult: DownloadResult
+                    
+                    switch result {
+                    case .success(let (data, _)):
+                        if let image = UIImage(data: data) {
+                            let imageResult = ImageLoadingResult(
+                                image: image,
+                                url: context.url,
+                                originalData: data
+                            )
+                            
+                            downloadResult = .success(imageResult)
+                        } else {
+                            downloadResult = .failure(NeoImageError.responseError(reason: .invalidImageData))
+                        }
+                    case .failure(let error):
+                        downloadResult = .failure(error)
+                    }
+                    
+                    // 모든 콜백 호출
+                    for callbackItem in callbacks {
+                        callbackItem.onCompleted?.call(downloadResult)
+                    }
+                }
+                
                 let downloadTask = DownloadTask()
-                // 새로운 콜백을 정의하여 결과를 반환
-                let delegate = Delegate<DownloadResult, Void>()
-                delegate.delegate(on: self) { (self, result) in
+                
+                // 객체를 생성, TaskCallback으로 래핑하여 add 메서드에 전달
+                let onCompleted = Delegate<DownloadResult, Void>()
+                
+                onCompleted.delegate(on: self) { (self, result) in
                     switch result {
                     case .success(let imageResult):
                         continuation.resume(returning: (downloadTask, imageResult.originalData))
@@ -75,33 +104,51 @@ public class ImageDownloader: @unchecked Sendable  {
                     }
                 }
                 
-                let callback = SessionDataTask.TaskCallback(onCompleted: delegate)
-                
-                // 기존 태스크에 새 콜백 추가
+                let callback = SessionDataTask.TaskCallback(onCompleted: onCompleted)
                 let task = sessionDelegate.append(existingTask, callback: callback)
-                downloadTask.linkToTask(task)
-                print("5")
-            } else {
-                // 새로운 다운로드 태스크 생성
-                let sessionDataTask = session.dataTask(with: context.request)
                 
-                // 완료 콜백 정의
-                let delegate = Delegate<DownloadResult, Void>()
-                delegate.delegate(on: self) { (self, result) in
+                downloadTask.linkToTask(task)
+            } else {
+                let sessionDataTask = session.dataTask(with: context.request)
+                let onCompleted = Delegate<DownloadResult, Void>()
+                let callback = SessionDataTask.TaskCallback(onCompleted: onCompleted)
+                let downloadTask = sessionDelegate.add(sessionDataTask, url: context.url, callback: callback)
+                
+                downloadTask.sessionTask?.onTaskDone.delegate(on: self) { (_, values) in
+                    let (result, callbacks) = values
+                    
+                    // 결과를 DownloadResult로 변환
+                    let downloadResult: DownloadResult
+                    switch result {
+                    case .success(let (data, _)):
+                        if let image = UIImage(data: data) {
+                            let imageResult = ImageLoadingResult(
+                                image: image,
+                                url: context.url,
+                                originalData: data
+                            )
+                            downloadResult = .success(imageResult)
+                        } else {
+                            downloadResult = .failure(NeoImageError.responseError(reason: .invalidImageData))
+                        }
+                    case .failure(let error):
+                        downloadResult = .failure(error)
+                    }
+                    
+                    // 모든 콜백 호출
+                    for callbackItem in callbacks {
+                        callbackItem.onCompleted?.call(downloadResult)
+                    }
+                }
+                
+                onCompleted.delegate(on: self) { (self, result) in
                     switch result {
                     case .success(let imageResult):
-                        let downloadTask = DownloadTask()
-                        downloadTask.linkToTask(downloadTask)
                         continuation.resume(returning: (downloadTask, imageResult.originalData))
                     case .failure(let error):
                         continuation.resume(throwing: error)
                     }
                 }
-                
-                let callback = SessionDataTask.TaskCallback(onCompleted: delegate)
-                
-                // 세션 델리게이트에 태스크 추가
-                let downloadTask = sessionDelegate.add(sessionDataTask, url: context.url, callback: callback)
                 
                 // 다운로드 시작
                 sessionDataTask.resume()
@@ -114,9 +161,8 @@ public class ImageDownloader: @unchecked Sendable  {
         let downloadTask = DownloadTask()
     
         let context = try await createDownloadContext(with: url)
+        let (actualDownloadTask, imageData) = try await createDownloadTask(context: context)
         
-        let (actualDownloadTask, imageData) = try await createDownloadTask(context: context) // MARK: error
-
         downloadTask.linkToTask(actualDownloadTask)
         
         return imageData

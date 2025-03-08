@@ -17,11 +17,8 @@ extension NeoImageCompatible {
 
 /// NeoImage 기능에 접근하기 위한 네임스페이스 역할을 하는 wrapper 구조체
 public struct NeoImageWrapper<Base: Sendable>: Sendable {
-    // MARK: - Properties
 
     public let base: Base
-
-    // MARK: - Lifecycle
 
     /// 여기서 Base는 이미지 캐시 및 이미지 데이터가 주입되는 UIImageView를 의미합니다.
     public init(_ base: Base) {
@@ -43,103 +40,39 @@ extension NeoImageWrapper where Base: UIImageView {
         guard await base.window != nil else {
             throw CacheError.invalidData
         }
-
-        guard let url else {
-            await MainActor.run { [weak base] in
-                guard let base else {
-                    return
-                }
-                base.image = placeholder
-            }
-
-            throw CacheError.invalidData
-        }
-
-        // placeholder 먼저 설정
+        
         if let placeholder {
             await MainActor.run { [weak base] in
-                guard let base else {
-                    return
-                }
+                guard let base else { return }
                 base.image = placeholder
-                print("\(url): Placeholder 설정 완료")
             }
         }
-
+        // TODO: gray로 차선책 placeholder 렌더 넣기
+        
+        guard let url else { throw CacheError.invalidData }
+        
         // UIImageView에 연결된 ImageTask를 가져옵니다
         // 현재 진행 중인 다운로드 작업이 있는지 확인하는데 사용됩니다
         if let task = objc_getAssociatedObject(base, ImageTaskKey.associatedKey) as? ImageTask {
             await task.cancel()
             await setImageDownloadTask(nil)
-            print("\(url): 기존 Task 존재하여 취소")
         }
-
-        let cacheKey = url.absoluteString
-
-        // 메모리 또는 디스크 캐시에서 이미지 데이터 확인
-        if let cachedData = try? await ImageCache.shared.retrieveImage(forKey: cacheKey),
-           let cachedImage = UIImage(data: cachedData) {
-            print("\(url): 기존 저장소에 이미지 존재 확인")
-
-            // 캐시된 이미지 처리
-            let processedImage = try await processImage(cachedImage, options: options)
-
-            await MainActor.run { [weak base] in
-                guard let base else {
-                    return
-                }
-                base.image = processedImage
-                print("\(url): 메모리에 위치한 이미지로 로드")
-
-                applyTransition(to: base, with: options?.transition)
-            }
-
-            return (
-                ImageLoadingResult(
-                    image: processedImage,
-                    url: url,
-                    originalData: cachedData
-                ),
-                nil
-            )
-        }
-
+        
         let imageTask = ImageTask()
-
         await setImageDownloadTask(imageTask)
-
-        let downloadResult = try await ImageDownloadManager.shared.downloadImage(with: url)
-        print("\(url): 이미지 다운로드 완료")
+        
+        // NeoImageManager를 사용해 이미지 다운로드 (캐시 확인 + 이미지 후처리)
+        let downloadResult = try await NeoImageManager.shared.downloadImage(with: url, options: options)
         try Task.checkCancellation()
-
-        let processedImage = try await processImage(downloadResult.image, options: options)
-        try Task.checkCancellation()
-
-        // 캐시 저장
-        if let data = processedImage.jpegData(compressionQuality: 0.8) {
-            try await ImageCache.shared.smartStore(data, forKey: url.absoluteString)
-            print("\(url): 이미지 캐싱 완료")
-        }
-
-        // 최종 UI 업데이트
+        
+        // UI 업데이트
         await MainActor.run { [weak base] in
-            guard let base else {
-                return
-            }
-
-            base.image = processedImage
-            print("\(url): 후처리된 이미지 렌더 완료")
+            guard let base else { return }
+            base.image = downloadResult.image
             applyTransition(to: base, with: options?.transition)
         }
-
-        return (
-            ImageLoadingResult(
-                image: processedImage,
-                url: url,
-                originalData: downloadResult.originalData
-            ),
-            imageTask
-        )
+//        imageTask.setDownloadTask(down)
+        return (downloadResult, imageTask)
     }
 
     // MARK: - Wrapper
@@ -186,14 +119,6 @@ extension NeoImageWrapper where Base: UIImageView {
         }
 
         return task
-    }
-
-    private func processImage(_ image: UIImage, options: NeoImageOptions?) async throws -> UIImage {
-        if let processor = options?.processor {
-            return try await processor.process(image)
-        }
-
-        return image
     }
 
     @MainActor

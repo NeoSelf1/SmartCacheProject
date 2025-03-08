@@ -13,7 +13,7 @@ public struct NeoImageOptions: Sendable {
 
     /// 이미지 프로세서
     public let processor: ImageProcessing?
-
+    
     /// 이미지 전환 효과
     public let transition: ImageTransition
 
@@ -22,6 +22,7 @@ public struct NeoImageOptions: Sendable {
 
     /// 캐시 만료 정책
     public let cacheExpiration: StorageExpiration
+    public var cancelOnDisappear: Bool = false
 
     // MARK: - Lifecycle
 
@@ -39,7 +40,7 @@ public struct NeoImageOptions: Sendable {
 }
 
 /// 이미지 전환 효과 열거형
-public enum ImageTransition: Sendable {
+public enum ImageTransition: Sendable, Equatable {
     /// 전환 효과 없음
     case none
     /// 페이드 인 효과

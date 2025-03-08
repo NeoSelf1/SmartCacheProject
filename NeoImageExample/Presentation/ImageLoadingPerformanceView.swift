@@ -33,6 +33,7 @@ struct ImageLoadingPerformanceView: View {
                                     HStack(spacing: 10) {
                                         NeoImageTestView(viewModel: viewModel, size: 160, id: row * 4)
                                         NeoImageTestView(viewModel: viewModel, size: 160, id: row * 4 + 1)
+                                            .padding(.trailing,24)
                                         
                                         KingfisherTestView(viewModel: viewModel, size: 160, id: row * 4)
                                         KingfisherTestView(viewModel: viewModel, size: 160, id: row * 4 + 1)
@@ -41,6 +42,7 @@ struct ImageLoadingPerformanceView: View {
                                     HStack(spacing: 10) {
                                         NeoImageTestView(viewModel: viewModel, size: 160, id: row * 4 + 2)
                                         NeoImageTestView(viewModel: viewModel, size: 160, id: row * 4 + 3)
+                                            .padding(.trailing,24)
                                         
                                         KingfisherTestView(viewModel: viewModel, size: 160, id: row * 4 + 2)
                                         KingfisherTestView(viewModel: viewModel, size: 160, id: row * 4 + 3)

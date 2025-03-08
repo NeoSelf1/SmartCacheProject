@@ -1,13 +1,12 @@
 import Foundation
 
-public class DiskStorage<T: DataTransformable>: @unchecked Sendable {
+public actor DiskStorage<T: DataTransformable> {
     private let name: String
     private let fileManager: FileManager
     private let directoryURL: URL
     private var storageReady = true
     
     var maybeCached : Set<String>?
-    let maybeCachedCheckingQueue = DispatchQueue(label: "com.neon.NeoImage.maybeCachedCheckingQueue")
     
     let metaChangingQueue: DispatchQueue
     
@@ -27,9 +26,10 @@ public class DiskStorage<T: DataTransformable>: @unchecked Sendable {
         
         metaChangingQueue = DispatchQueue(label: cacheName)
         
-        setupCacheChecking()
-        
-        try? prepareDirectory()
+        Task {
+            await setupCacheChecking()
+            try? await prepareDirectory()
+        }
     }
     
     // MARK: - Functions
@@ -58,7 +58,7 @@ public class DiskStorage<T: DataTransformable>: @unchecked Sendable {
         // 생성된 날짜, 수정된 일자를 실제 수정된 시간이 아닌, 만료 예정 시간을 저장하는 용도로 재활용합니다.
         // 실제로, 파일 시스템의 기본속성을 활용하기에 추가적인 저장공간이 필요 없음
         // 파일과 만료 정보가 항상 동기화되어 있음 (파일이 삭제되면 만료 정보도 자동으로 삭제)
-        let attributes: [FileAttributeKey: Any] = [
+        let attributes: [FileAttributeKey: Sendable] = [
             .creationDate: Date(),
             .modificationDate: expiration.estimatedExpirationSinceNow,
         ]
@@ -77,9 +77,7 @@ public class DiskStorage<T: DataTransformable>: @unchecked Sendable {
             )
         }
         
-        maybeCachedCheckingQueue.async {
-            self.maybeCached?.insert(fileURL.lastPathComponent)
-        }
+        self.maybeCached?.insert(fileURL.lastPathComponent)
     }
     
     
@@ -88,18 +86,13 @@ public class DiskStorage<T: DataTransformable>: @unchecked Sendable {
         actuallyLoad: Bool = true,
         extendingExpiration: ExpirationExtending = .cacheTime // 현재 Config
     ) async throws -> T? {
-        let fileURL = cacheFileURL(forKey: key)
-        let filePath = fileURL.path
-        
-        let fileMaybeCached = maybeCachedCheckingQueue.sync {
-            return maybeCached?.contains(fileURL.lastPathComponent) ?? true
-        }
-        
         guard storageReady else {
             throw CacheError.storageNotReady
         }
         
-        guard fileMaybeCached else {
+        let fileURL = cacheFileURL(forKey: key)
+        let filePath = fileURL.path
+        guard maybeCached?.contains(fileURL.lastPathComponent) ?? true else {
             return nil
         }
         
@@ -225,16 +218,14 @@ extension DiskStorage {
     }
     
     private func setupCacheChecking() {
-        maybeCachedCheckingQueue.async {
-            do {
-                self.maybeCached = Set()
-                try self.fileManager.contentsOfDirectory(atPath: self.directoryURL.path).forEach {
-                    fileName in
-                    self.maybeCached?.insert(fileName)
-                }
-            } catch {
-                self.maybeCached = nil
+        do {
+            self.maybeCached = Set()
+            try self.fileManager.contentsOfDirectory(atPath: self.directoryURL.path).forEach {
+                fileName in
+                self.maybeCached?.insert(fileName)
             }
+        } catch {
+            self.maybeCached = nil
         }
     }
     

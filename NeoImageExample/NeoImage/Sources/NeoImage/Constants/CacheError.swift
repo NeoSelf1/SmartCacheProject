@@ -1,6 +1,6 @@
 import Foundation
 
-enum CacheError: @unchecked Sendable, Error {
+enum CacheError: Sendable, Error {
     // 데이터 관련 에러
     case invalidData
     case invalidImage
@@ -21,8 +21,8 @@ enum CacheError: @unchecked Sendable, Error {
     case cannotReadFromFile(Error)
 
     case invalidURLResource
-    case cannotConvertToData(object: Any)
-    case cannotSetCacheFileAttribute(filePath: String, attributes: [FileAttributeKey : Any], error: any Error)
+    case cannotConvertToData(object: Sendable)
+    case cannotSetCacheFileAttribute(filePath: String, attributes: [FileAttributeKey : Sendable], error: any Error)
     
     /// 캐시 키 관련 에러
     case invalidCacheKey

@@ -3,7 +3,7 @@ import UIKit
 
 /// 쓰기 제어와 같은 동시성이 필요한 부분만 선택적으로 제어하기 위해 전체 ImageCache를 actor로 변경하지 않고, ImageCacheActor 생성
 /// actor를 사용하면 모든 동작이 actor의 실행큐를 통과해야하기 때문에, 동시성 보호가 불필요한 read-only 동작도 직렬화되며 오버헤드가 발생
-public class ImageCache: @unchecked Sendable {
+public final class ImageCache: Sendable {
     // MARK: - Static Properties
     
     /// ERROR: Static property 'shared' is not concurrency-safe because non-'Sendable' type
@@ -26,7 +26,6 @@ public class ImageCache: @unchecked Sendable {
     // Disk에 대한 접근이 패키지 외부에서 동시에 이루어질 경우, 동일한 위치에 다른 데이터가 덮어씌워지는 data race 상황이 됩니다. 이를 방지하고자, 기존
     // Kingfisher에서는 DispatchQueue를 통해  직렬화 큐를 구현한 후, store(Write), value(Read)를 직렬화 큐에 전송하여
     // 순차적인 실행이 보장되게 하였습니다.
-    private let ioQueue: DispatchQueue
     
     // MARK: - Lifecycle
     
@@ -49,10 +48,6 @@ public class ImageCache: @unchecked Sendable {
             name: name,
             fileManager: .default
         )
-        
-        let ioQueueName = "com.neon.NeoImage.ImageCache.ioQueue.\(UUID().uuidString)"
-        
-        ioQueue = DispatchQueue(label: ioQueueName)
         
         Task { @MainActor in
             let notifications: [(Notification.Name, Selector)]
@@ -114,10 +109,10 @@ public class ImageCache: @unchecked Sendable {
     }
     
     @objc func cleanExpiredDiskCache() {
-        ioQueue.async {
+        Task {
             do {
                 var removed: [URL] = []
-                let removedExpired = try self.diskStorage.removeExpiredValues()
+                let removedExpired = try await self.diskStorage.removeExpiredValues()
                 removed.append(contentsOf: removedExpired)
             } catch {}
         }

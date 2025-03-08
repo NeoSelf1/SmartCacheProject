@@ -5,8 +5,6 @@ import UIKit
 /// 이 클래스는 URL 기반으로 작업을 추적하며, 동일한 URL에 대한 중복 다운로드를 방지합니다.
 public class TaskManager: @unchecked Sendable {
     
-    // MARK: - Properties
-    
     /// 스레드 안전성을 위한 동시성 큐
     private let taskQueue = DispatchQueue(label: "com.neon.NeoImage.TaskManagerQueue", attributes: .concurrent)
     

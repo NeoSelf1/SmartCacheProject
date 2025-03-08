@@ -222,7 +222,6 @@ public struct NeoImage: View {
         result.options = NeoImageOptions(
             processor: processor,
             transition: result.options.transition,
-            retryStrategy: result.options.retryStrategy,
             cacheExpiration: result.options.cacheExpiration
         )
         return result
@@ -234,7 +233,6 @@ public struct NeoImage: View {
         result.options = NeoImageOptions(
             processor: result.options.processor,
             transition: .fade(duration),
-            retryStrategy: result.options.retryStrategy,
             cacheExpiration: result.options.cacheExpiration
         )
         return result

@@ -3,14 +3,9 @@ import UIKit
 
 /// 쓰기 제어와 같은 동시성이 필요한 부분만 선택적으로 제어하기 위해 전체 ImageCache를 actor로 변경하지 않고, ImageCacheActor 생성
 /// actor를 사용하면 모든 동작이 actor의 실행큐를 통과해야하기 때문에, 동시성 보호가 불필요한 read-only 동작도 직렬화되며 오버헤드가 발생
-@globalActor
-public actor ImageCacheActor {
-    public static let shared = ImageCacheActor()
-}
-
-public final class ImageCache: @unchecked Sendable {
+public class ImageCache: @unchecked Sendable {
     // MARK: - Static Properties
-
+    
     /// ERROR: Static property 'shared' is not concurrency-safe because non-'Sendable' type
     /// 'ImageCache' may have shared mutable state
     /// ```
@@ -20,52 +15,68 @@ public final class ImageCache: @unchecked Sendable {
     /// 싱글톤 패턴을 사용할 경우,위 에러가 발생합니다.
     /// 이는 별도의 가변 프로퍼티를 클래스 내부에 지니고 있지 않음에도 발생하는 에러입니다
     /// 이를 해결하기 위해선, Actor를 사용하거나, Serial Queue를 사용해 동기화를 해줘야 합니다.
-    @ImageCacheActor
-    public static let shared = try! ImageCache(name: "default")
-
+    ///
+    public static let shared = ImageCache(name: "default")
+    
     // MARK: - Properties
-
-    private let memoryStorage: MemoryStorageActor
-    private let diskStorage: DiskStorage<Data>
-
+    
+    public let memoryStorage: MemoryStorageActor
+    public let diskStorage: DiskStorage<Data>
+    
+    // Disk에 대한 접근이 패키지 외부에서 동시에 이루어질 경우, 동일한 위치에 다른 데이터가 덮어씌워지는 data race 상황이 됩니다. 이를 방지하고자, 기존
+    // Kingfisher에서는 DispatchQueue를 통해  직렬화 큐를 구현한 후, store(Write), value(Read)를 직렬화 큐에 전송하여
+    // 순차적인 실행이 보장되게 하였습니다.
+    private let ioQueue: DispatchQueue
+    
     // MARK: - Lifecycle
-
+    
     // MARK: - Initialization
-
-    public init(name: String) throws {
-        guard !name.isEmpty else {
-            throw CacheError.invalidCacheKey
+    public init(
+        name: String
+    ) {
+        if name.isEmpty {
+            fatalError("You should specify a name for the cache. A cache with empty name is not permitted.")
         }
-
-        // 메모리 캐싱 관련 설정 과정입니다.
-        // NSProcessInfo를 통해 총 메모리 크기를 접근한 후, 메모리 상한선을 전체 메모리의 1/4로 한정합니다.
+        
         let totalMemory = ProcessInfo.processInfo.physicalMemory
         let memoryLimit = totalMemory / 4
+        
         memoryStorage = MemoryStorageActor(
             totalCostLimit: min(Int.max, Int(memoryLimit))
         )
-
-        // 디스크 캐시에 대한 설정을 여기서 정의해줍니다.
-        let diskConfig = DiskStorage<Data>.Config(
+        
+        diskStorage = DiskStorage<Data>(
             name: name,
-            directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            fileManager: .default
         )
-
-        // 디스크 캐시 제어 관련 클래스 인스턴스 생성
-        diskStorage = try DiskStorage(config: diskConfig)
+        
+        let ioQueueName = "com.neon.NeoImage.ImageCache.ioQueue.\(UUID().uuidString)"
+        
+        ioQueue = DispatchQueue(label: ioQueueName)
+        
+        Task { @MainActor in
+            let notifications: [(Notification.Name, Selector)]
+            notifications = [
+                (UIApplication.didReceiveMemoryWarningNotification, #selector(clearMemoryCache)),
+                (UIApplication.willTerminateNotification, #selector(cleanExpiredDiskCache))
+            ]
+            
+            notifications.forEach {
+                NotificationCenter.default.addObserver(self, selector: $0.1, name: $0.0, object: nil)
+            } // 각 알림에 대해 옵저버 등록
+        }
     }
-
+    
     // MARK: - Functions
-
+    
     /// 메모리와 디스크 캐시에 모두 데이터를 저장합니다.
-    @ImageCacheActor
     public func store(
         _ data: Data,
         forKey key: String,
         expiration: StorageExpiration? = nil
     ) async throws {
         await memoryStorage.store(value: data, forKey: key, expiration: expiration)
-
+        
         try await diskStorage.store(
             value: data,
             forKey: key,
@@ -77,9 +88,9 @@ public final class ImageCache: @unchecked Sendable {
         if let memoryData = await memoryStorage.value(forKey: key) {
             return memoryData
         }
-
+        
         let diskData = try await diskStorage.value(forKey: key)
-
+        
         if let diskData {
             await memoryStorage.store(
                 value: diskData,
@@ -87,33 +98,30 @@ public final class ImageCache: @unchecked Sendable {
                 expiration: .days(7)
             )
         }
-
+        
         return diskData
     }
-
-    /// 메모리와 디스크 모두에서 특정 키에 해당하는 이미지 데이터를 제거합니다.
-    @ImageCacheActor
-    public func removeImage(forKey key: String) async throws {
-        await memoryStorage.remove(forKey: key)
-
-        try await diskStorage.remove(forKey: key)
-    }
-
+    
     /// 메모리와 디스크 모두에 존재하는 모든 데이터를 제거합니다.
-    @ImageCacheActor
     public func clearCache() async throws {
         await memoryStorage.removeAll()
-
+        
         try await diskStorage.removeAll()
     }
-
-    /// Checks if an image exists in cache (either memory or disk)
-    @ImageCacheActor
-    public func isCached(forKey key: String) async -> Bool {
-        if await memoryStorage.isCached(forKey: key) {
-            return true
+    
+    @objc public func clearMemoryCache() {
+        Task {
+            await memoryStorage.removeAll()
         }
-
-        return await diskStorage.isCached(forKey: key)
+    }
+    
+    @objc func cleanExpiredDiskCache() {
+        ioQueue.async {
+            do {
+                var removed: [URL] = []
+                let removedExpired = try self.diskStorage.removeExpiredValues()
+                removed.append(contentsOf: removedExpired)
+            } catch {}
+        }
     }
 }

@@ -1,7 +1,8 @@
 import Foundation
 
-class DiskStorage<T: DataTransformable>: @unchecked Sendable {
-    private let config: Config
+public class DiskStorage<T: DataTransformable>: @unchecked Sendable {
+    private let name: String
+    private let fileManager: FileManager
     private let directoryURL: URL
     
     private var storageReady = true
@@ -10,20 +11,26 @@ class DiskStorage<T: DataTransformable>: @unchecked Sendable {
     let maybeCachedCheckingQueue = DispatchQueue(label: "com.neon.NeoImage.maybeCachedCheckingQueue")
     
     let metaChangingQueue: DispatchQueue
+    
     // MARK: - Lifecycle
     
-    /// FileManager를 통해 디렉토리를 생성하는 과정에서 에러가 발생할 수 있기 때문에 인스턴스 생성 자체에서 throws 키워드를 기입해줍니다.
-    init(config: Config) throws {
-        // 외부에서 주입된 디스크 저장소에 대한 설정값과 Creation 구조체로 생성된 디렉토리 URL와 cacheName을 생성 및 self.directoryURL에
-        // 저장합니다.
-        self.config = config
-        let creation = Creation(config)
-        directoryURL = creation.directoryURL
+    init (
+        name: String,
+        fileManager: FileManager
+    ) {
+        self.name = name
+        self.fileManager = fileManager
         
-        metaChangingQueue = DispatchQueue(label: creation.cacheName)
+        let url = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let cacheName = "com.neoself.NeoImage.ImageCache.\(name)"
+        
+        directoryURL = url.appendingPathComponent(cacheName, isDirectory: true)
+        
+        metaChangingQueue = DispatchQueue(label: cacheName)
+        
         setupCacheChecking()
         
-        try prepareDirectory()
+        try? prepareDirectory()
     }
     
     // MARK: - Functions
@@ -33,7 +40,7 @@ class DiskStorage<T: DataTransformable>: @unchecked Sendable {
             throw CacheError.storageNotReady
         }
         
-        let expiration = expiration ?? config.expiration
+        let expiration = expiration ?? NeoImageConstants.expiration
         
         guard !expiration.isExpired else { return }
         
@@ -41,16 +48,7 @@ class DiskStorage<T: DataTransformable>: @unchecked Sendable {
             throw CacheError.cannotConvertToData(object: value)
         }
         
-        // 별도로 메서드를 통해 기한을 전달하지 않으면, 기본값으로 config.expiration인 7일로 정의합니다.
         let fileURL = cacheFileURL(forKey: key)
-        
-        // Disk에 대한 접근이 패키지 외부에서 동시에 이루어질 경우, 동일한 위치에 다른 데이터가 덮어씌워지는 data race 상황이 됩니다. 이를 방지하고자, 기존
-        // Kingfisher에서는 DispatchQueue를 통해  직렬화 큐를 구현한 후, store(Write), value(Read)를 직렬화 큐에 전송하여
-        // 순차적인 실행이 보장되게 하였습니다.
-
-        // 이를 Swift Concurrency로 변경하고자, 동일한 직렬화 기능을 수행하는 Actor 클래스로 대체하였습니다.
-        
-        /// Kingfisher에서는 상위 클래스인 ImageCache에서 ioQueue로 동기화를 이미 진행하고 있습니다. 이에 serialActor를 제거합니다.
         
         // Foundation 내부 Data 타입의 내장 메서드입니다.
         // 해당 위치로 data 내부 컨텐츠를 write 합니다.
@@ -68,11 +66,11 @@ class DiskStorage<T: DataTransformable>: @unchecked Sendable {
         
         // 파일의 메타데이터가 업데이트됨
         // 이는 디스크에 대한 I/O 작업을 수반
-        // 파일의 내용은 변경되지 않고 속성만 변경
         do {
-            try config.fileManager.setAttributes(attributes, ofItemAtPath: fileURL.path)
+            try fileManager.setAttributes(attributes, ofItemAtPath: fileURL.path)
         } catch {
-            try? config.fileManager.removeItem(at: fileURL)
+            try? fileManager.removeItem(at: fileURL)
+            
             throw CacheError.cannotSetCacheFileAttribute(
                 filePath: fileURL.path,
                 attributes: attributes,
@@ -85,17 +83,21 @@ class DiskStorage<T: DataTransformable>: @unchecked Sendable {
         }
     }
     
+    
     func value(
         forKey key: String, // 캐시의 키
         actuallyLoad: Bool = true,
-        extendingExpiration: ExpirationExtending = .cacheTime // 현재 Confiㅎ
+        extendingExpiration: ExpirationExtending = .cacheTime // 현재 Config
     ) async throws -> T? {
-        let fileManager = config.fileManager
-        // 주어진 키에 대한 캐시 파일 URL을 생성
         let fileURL = cacheFileURL(forKey: key)
         let filePath = fileURL.path
+        
         let fileMaybeCached = maybeCachedCheckingQueue.sync {
             return maybeCached?.contains(fileURL.lastPathComponent) ?? true
+        }
+        
+        guard storageReady else {
+            throw CacheError.storageNotReady
         }
         
         guard fileMaybeCached else {
@@ -110,6 +112,7 @@ class DiskStorage<T: DataTransformable>: @unchecked Sendable {
         
         // 파일에서 데이터를 읽어옴
         let data = try Data(contentsOf: fileURL)
+        
         // DataTransformable 프로토콜의 fromData를 사용해 원본 타입으로 변환
         let obj = try T.fromData(data)
         
@@ -122,7 +125,7 @@ class DiskStorage<T: DataTransformable>: @unchecked Sendable {
             case .none:
                 return obj
             case .cacheTime:
-                expirationDate = config.expiration.estimatedExpirationSinceNow
+                expirationDate = NeoImageConstants.expiration.estimatedExpirationSinceNow
                 // .expirationTime: 지정된 새로운 만료 시간으로 연장
             case let .expirationTime(storageExpiration):
                 expirationDate = storageExpiration.estimatedExpirationSinceNow
@@ -141,21 +144,20 @@ class DiskStorage<T: DataTransformable>: @unchecked Sendable {
         return obj
     }
     
-    
     /// 특정 키에 해당하는 파일을 삭제하는 메서드
     func remove(forKey key: String) async throws {
         let fileURL = cacheFileURL(forKey: key)
-        try config.fileManager.removeItem(at: fileURL)
+        try fileManager.removeItem(at: fileURL)
     }
 
 
     /// 디렉토리 내의 모든 파일을 삭제하는 메서드
     func removeAll() async throws {
-        try config.fileManager.removeItem(at: directoryURL)
+        print("disk Cleared: \(directoryURL)")
+        try fileManager.removeItem(at: directoryURL)
         try prepareDirectory()
     }
-
-    /// 캐시 확인
+    
     func isCached(forKey key: String) async -> Bool {
         do {
             let result = try await value(
@@ -168,6 +170,10 @@ class DiskStorage<T: DataTransformable>: @unchecked Sendable {
             return false
         }
     }
+    
+    func removeExpiredValues() throws -> [URL] {
+        return try removeExpiredValues(referenceDate: Date())
+    }
 }
 
 extension DiskStorage {
@@ -175,23 +181,56 @@ extension DiskStorage {
         let fileName = cacheFileName(forKey: key)
         return directoryURL.appendingPathComponent(fileName, isDirectory: false)
     }
-
+    
     /// 사전에 패키지에서 설정된 Config 구조체를 통해 파일명을 해시화하기로 설정했는지 여부, 임의로 전달된 접미사 단어 유무에 따라 캐시될때 저장될 파일명을 변환하여
     /// 반환해줍니다.
     private func cacheFileName(forKey key: String) -> String {
-        let hashedKey = key.sha256
-        if let ext = config.pathExtension {
-            return "\(hashedKey).\(ext)"
+        return key.sha256
+    }
+    
+    // MARK: - 만료기간 종료 여부 파악 관련 메서드들
+    func removeExpiredValues(referenceDate: Date) throws -> [URL] {
+        let propertyKeys: [URLResourceKey] = [
+            .isDirectoryKey,
+            .contentModificationDateKey
+        ]
+
+        let urls = try allFileURLs(for: propertyKeys)
+        let keys = Set(propertyKeys)
+        let expiredFiles = urls.filter { fileURL in
+            do {
+                let meta = try FileMeta(fileURL: fileURL, resourceKeys: keys)
+                return meta.expired(referenceDate: referenceDate)
+            } catch {
+                return true
+            }
         }
         
-        return hashedKey
+        try expiredFiles.forEach { url in
+            try fileManager.removeItem(at: url)
+        }
+        return expiredFiles
+    }
+    
+    private func allFileURLs(for propertyKeys: [URLResourceKey]) throws -> [URL] {
+
+        guard let directoryEnumerator = fileManager.enumerator(
+            at: directoryURL, includingPropertiesForKeys: propertyKeys, options: .skipsHiddenFiles) else
+        {
+            throw CacheError.fileEnumeratorCreationFailed
+        }
+
+        guard let urls = directoryEnumerator.allObjects as? [URL] else {
+            throw CacheError.fileEnumeratorCreationFailed
+        }
+        return urls
     }
     
     private func setupCacheChecking() {
         maybeCachedCheckingQueue.async {
             do {
                 self.maybeCached = Set()
-                try self.config.fileManager.contentsOfDirectory(atPath: self.directoryURL.path).forEach {
+                try self.fileManager.contentsOfDirectory(atPath: self.directoryURL.path).forEach {
                     fileName in
                     self.maybeCached?.insert(fileName)
                 }
@@ -200,20 +239,18 @@ extension DiskStorage {
             }
         }
     }
-
+    
     private func prepareDirectory() throws {
         // config에 custom fileManager를 주입할 수 있기 때문에, 여기서 .default를 접근하지 않고 Config 내부 fileManager를
         // 접근합니다.
-        let fileManager = config.fileManager
         let path = directoryURL.path
-
+        
         // Creation 구조체를 통해 생성된 url이 FileSystem에 존재하는지 검증
         guard !fileManager.fileExists(atPath: path) else {
             return
         }
-
+        
         do {
-            // FileManager를 통해 해당 path에 디렉토리 생성
             try fileManager.createDirectory(
                 atPath: path,
                 withIntermediateDirectories: true,
@@ -228,64 +265,64 @@ extension DiskStorage {
     }
 }
 
-/// 직렬화를 위한 간단한 액터
-/// 에러 처리 여부에 따라 오버로드되어있기에, 에러처리가 필요한지 여부에 따라 선택적으로 try 키워드를 삽입
-actor Actor {
-    func run<T>(_ operation: @Sendable () throws -> T) throws -> T {
-        try operation()
-    }
-
-    func run<T>(_ operation: @Sendable () -> T) -> T {
-        operation()
-    }
-}
 
 extension DiskStorage {
-    /// Represents the configuration used in a ``DiskStorage/Backend``.
-    public struct Config: @unchecked Sendable {
-
-        public var expiration = StorageExpiration.days(7)
-
-        public var pathExtension: String?
+    struct FileMeta {
+        let url: URL
+        let lastAccessDate: Date?
+        let estimatedExpirationDate: Date?
         
-        public var cachePathBlock: (@Sendable (_ directory: URL, _ cacheName: String) -> URL)! = {
-            directory, cacheName in
-            directory.appendingPathComponent(cacheName, isDirectory: true)
+        init(fileURL: URL, resourceKeys: Set<URLResourceKey>) throws {
+            let meta = try fileURL.resourceValues(forKeys: resourceKeys)
+            self.init(
+                fileURL: fileURL,
+                lastAccessDate: meta.creationDate,
+                estimatedExpirationDate: meta.contentModificationDate
+            )
+        }
+        
+        init(
+            fileURL: URL,
+            lastAccessDate: Date?,
+            estimatedExpirationDate: Date?
+        ){
+            self.url = fileURL
+            self.lastAccessDate = lastAccessDate
+            self.estimatedExpirationDate = estimatedExpirationDate
         }
 
-        public let name: String
-
-        let fileManager: FileManager
-        let directory: URL?
-
-        public init(
-            name: String,
-            fileManager: FileManager = .default,
-            directory: URL? = nil
-        ) {
-            self.name = name
-            self.fileManager = fileManager
-            self.directory = directory
+        func expired(referenceDate: Date) -> Bool {
+            return estimatedExpirationDate?.isPast(referenceDate: referenceDate) ?? true
         }
-    }
-}
-
-extension DiskStorage {
-    struct Creation {
-        let directoryURL: URL
-        let cacheName: String
-
-
-        init(_ config: Config) {
-            let url: URL
-            if let directory = config.directory {
-                url = directory
-            } else {
-                url = config.fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        
+        func extendExpiration(with fileManager: FileManager, extendingExpiration: ExpirationExtending) {
+            guard let lastAccessDate = lastAccessDate,
+                  let lastEstimatedExpiration = estimatedExpirationDate else
+            {
+                return
             }
 
-            cacheName = "com.neoself.NeoImage.ImageCache.\(config.name)"
-            directoryURL = config.cachePathBlock(url, cacheName)
+            let attributes: [FileAttributeKey : Any]
+
+            switch extendingExpiration {
+            case .none:
+                // not extending expiration time here
+                return
+            case .cacheTime:
+                let originalExpiration: StorageExpiration =
+                    .seconds(lastEstimatedExpiration.timeIntervalSince(lastAccessDate))
+                attributes = [
+                    .creationDate: Date().fileAttributeDate,
+                    .modificationDate: originalExpiration.estimatedExpirationSinceNow.fileAttributeDate
+                ]
+            case .expirationTime(let expirationTime):
+                attributes = [
+                    .creationDate: Date().fileAttributeDate,
+                    .modificationDate: expirationTime.estimatedExpirationSinceNow.fileAttributeDate
+                ]
+            }
+
+            try? fileManager.setAttributes(attributes, ofItemAtPath: url.path)
         }
     }
 }

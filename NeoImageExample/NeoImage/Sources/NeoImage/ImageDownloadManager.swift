@@ -2,9 +2,6 @@ import Foundation
 import UIKit
 
 public final class NeoImageManager: @unchecked Sendable {
-    
-    // MARK: - Properties
-    
     private let propertyQueue = DispatchQueue(label: "com.neon.NeoImage.NeoImageManagerPropertyQueue")
     
     /// NeoImage 전체에서 사용되는 공유 매니저 인스턴스
@@ -31,12 +28,11 @@ public final class NeoImageManager: @unchecked Sendable {
     
     // MARK: - Initialization
     
-    private convenience init() {
-        self.init(downloader: .default, cache: try! ImageCache(name: "default"))
-    }
-    
     /// 지정된 다운로더와 캐시로 이미지 다운로드 매니저를 생성합니다.
-    public init(downloader: ImageDownloader, cache: ImageCache) {
+    public init(
+        downloader: ImageDownloader = .default,
+        cache: ImageCache = ImageCache(name: "default")
+    ) {
         _downloader = downloader
         _cache = cache
         

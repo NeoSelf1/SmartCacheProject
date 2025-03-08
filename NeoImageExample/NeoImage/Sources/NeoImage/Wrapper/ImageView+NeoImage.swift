@@ -51,9 +51,10 @@ extension NeoImageWrapper where Base: UIImageView {
         
         guard let url else { throw CacheError.invalidData }
         
+        // TODO: ImageTask 연결하기
         // UIImageView에 연결된 ImageTask를 가져옵니다
         // 현재 진행 중인 다운로드 작업이 있는지 확인하는데 사용됩니다
-        if let task = objc_getAssociatedObject(base, ImageTaskKey.associatedKey) as? ImageTask {
+        if let task = objc_getAssociatedObject(base, NeoImageConstants.associatedKey) as? ImageTask {
             await task.cancel()
             await setImageDownloadTask(nil)
         }
@@ -170,7 +171,7 @@ extension NeoImageWrapper where Base: UIImageView {
 
         objc_setAssociatedObject(
             base, // 대상 객체 (UIImageView)
-            ImageTaskKey.associatedKey, // 키 값
+            NeoImageConstants.associatedKey, // 키 값
             task, // 저장할 값
             .OBJC_ASSOCIATION_RETAIN_NONATOMIC // 메모리 관리 정책
         )

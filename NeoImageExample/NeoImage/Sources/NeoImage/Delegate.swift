@@ -9,7 +9,7 @@ public class Delegate<Input, Output>: @unchecked Sendable {
     public init() {}
 
     /// 스레드 안정성을 보장할 수있는 DispatchQueue를 사용하기 위해 이벤트 핸들링 구현 시, Delegate 클래스를 사용합니다.
-    private let propertyQueue = DispatchQueue(label: "com.onevcat.Kingfisher.DelegateQueue")
+    private let propertyQueue = DispatchQueue(label: "com.neon.NeoImage.DelegateQueue")
     
     /// 클로저(block 또는 asyncBlock)를 저장하고, 필요할 때 호출
     private var _block: ((Input) -> Output?)?

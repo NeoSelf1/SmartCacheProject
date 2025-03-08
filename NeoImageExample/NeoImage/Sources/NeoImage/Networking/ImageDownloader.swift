@@ -58,47 +58,19 @@ public class ImageDownloader: @unchecked Sendable  {
         return DownloadingContext(url: url, request: request)
     }
     
-    private func createDownloadTask(context: DownloadingContext) async throws -> (DownloadTask, Data) {
-        // 여러 요청이 동시에 실행될 경우를 위한 액터 또는 동기화 메커니즘 필요
+    private func createDownloadTask(context: DownloadingContext) async throws -> DownloadTask {
         return try await withCheckedThrowingContinuation { continuation in
             // 기존 태스크 확인 (중복 다운로드 방지)
             if let existingTask = sessionDelegate.task(for: context.url) {
-                existingTask.onTaskDone.delegate(on: self) { (_, values) in
-                    let (result, callbacks) = values
-                    let downloadResult: DownloadResult
-                    
-                    switch result {
-                    case .success(let (data, _)):
-                        if let image = UIImage(data: data) {
-                            let imageResult = ImageLoadingResult(
-                                image: image,
-                                url: context.url,
-                                originalData: data
-                            )
-                            
-                            downloadResult = .success(imageResult)
-                        } else {
-                            downloadResult = .failure(NeoImageError.responseError(reason: .invalidImageData))
-                        }
-                    case .failure(let error):
-                        downloadResult = .failure(error)
-                    }
-                    
-                    // 모든 콜백 호출
-                    for callbackItem in callbacks {
-                        callbackItem.onCompleted?.call(downloadResult)
-                    }
-                }
-                
                 let downloadTask = DownloadTask()
                 
-                // 객체를 생성, TaskCallback으로 래핑하여 add 메서드에 전달
+                // 콜백 생성
                 let onCompleted = Delegate<DownloadResult, Void>()
                 
-                onCompleted.delegate(on: self) { (self, result) in
+                onCompleted.delegate(on: self) { [weak downloadTask] (self, result) in
                     switch result {
-                    case .success(let imageResult):
-                        continuation.resume(returning: (downloadTask, imageResult.originalData))
+                    case .success(_):
+                        continuation.resume(returning: downloadTask ?? DownloadTask())
                     case .failure(let error):
                         continuation.resume(throwing: error)
                     }
@@ -106,45 +78,20 @@ public class ImageDownloader: @unchecked Sendable  {
                 
                 let callback = SessionDataTask.TaskCallback(onCompleted: onCompleted)
                 let task = sessionDelegate.append(existingTask, callback: callback)
-                
-                downloadTask.linkToTask(task)
+                Task {
+                    await downloadTask.linkToTask(task)
+                }
+                continuation.resume(returning: downloadTask)
             } else {
                 let sessionDataTask = session.dataTask(with: context.request)
                 let onCompleted = Delegate<DownloadResult, Void>()
                 let callback = SessionDataTask.TaskCallback(onCompleted: onCompleted)
                 let downloadTask = sessionDelegate.add(sessionDataTask, url: context.url, callback: callback)
                 
-                downloadTask.sessionTask?.onTaskDone.delegate(on: self) { (_, values) in
-                    let (result, callbacks) = values
-                    
-                    // 결과를 DownloadResult로 변환
-                    let downloadResult: DownloadResult
+                onCompleted.delegate(on: self) { [weak downloadTask] (self, result) in
                     switch result {
-                    case .success(let (data, _)):
-                        if let image = UIImage(data: data) {
-                            let imageResult = ImageLoadingResult(
-                                image: image,
-                                url: context.url,
-                                originalData: data
-                            )
-                            downloadResult = .success(imageResult)
-                        } else {
-                            downloadResult = .failure(NeoImageError.responseError(reason: .invalidImageData))
-                        }
-                    case .failure(let error):
-                        downloadResult = .failure(error)
-                    }
-                    
-                    // 모든 콜백 호출
-                    for callbackItem in callbacks {
-                        callbackItem.onCompleted?.call(downloadResult)
-                    }
-                }
-                
-                onCompleted.delegate(on: self) { (self, result) in
-                    switch result {
-                    case .success(let imageResult):
-                        continuation.resume(returning: (downloadTask, imageResult.originalData))
+                    case .success(_):
+                        continuation.resume(returning: downloadTask ?? DownloadTask())
                     case .failure(let error):
                         continuation.resume(throwing: error)
                     }
@@ -157,16 +104,11 @@ public class ImageDownloader: @unchecked Sendable  {
     }
     
     @discardableResult
-    open func downloadImageData(with url: URL) async throws -> Data {
-        let downloadTask = DownloadTask()
-    
-        let context = try await createDownloadContext(with: url)
-        let (actualDownloadTask, imageData) = try await createDownloadTask(context: context)
-        
-        downloadTask.linkToTask(actualDownloadTask)
-        
-        return imageData
-    }
+        open func downloadImageData(with url: URL) async throws -> DownloadTask {
+            let context = try await createDownloadContext(with: url)
+            let downloadTask = try await createDownloadTask(context: context)
+            return downloadTask
+        }
     
     /// Downloads an image with a URL and option.
     /// - Parameters:
@@ -175,7 +117,11 @@ public class ImageDownloader: @unchecked Sendable  {
     /// - Returns: The image loading result.
     public func downloadImage(with url: URL) async throws -> ImageLoadingResult {
         // 이미지 데이터 다운로드
-        let imageData = try await downloadImageData(with: url)
+        let downloadTask = try await downloadImageData(with: url)
+        
+        guard let imageData = await downloadTask.sessionTask?.mutableData, !imageData.isEmpty else {
+            throw NeoImageError.responseError(reason: .invalidImageData)
+        }
         
         guard let image = UIImage(data: imageData) else {
             throw NeoImageError.responseError(reason: .invalidImageData)

@@ -15,31 +15,26 @@ public struct ImageLoadingResult: Sendable {
 
 typealias DownloadResult = Result<ImageLoadingResult, NeoImageError>
 
-public class ImageDownloader: @unchecked Sendable  {
+public final class ImageDownloader: Sendable  {
     public static let `default` = ImageDownloader(name: "default")
-    private let propertyQueue = DispatchQueue(label: "com.neon.NeoImage.ImageDownloaderPropertyQueue")
     
-    private var _downloadTimeout: TimeInterval = 15.0
-    open var downloadTimeout: TimeInterval {
-        get { propertyQueue.sync { _downloadTimeout } }
-        set { propertyQueue.sync { _downloadTimeout = newValue } }
-    }
-    
+    private let downloadTimeout: TimeInterval = 15.0
     private let name: String
     private let session: URLSession
-    private let taskManager = TaskManager()
     
-    public var requestsUsePipelining = false
+    private let requestsUsePipelining: Bool
+    private let sessionDelegate: SessionDelegate
     
-    open var sessionDelegate: SessionDelegate
-    
-    public init(name: String) {
+    public init(
+        name: String,
+        requestsUsePipelining: Bool = false
+    ) {
         self.name = name
-        sessionDelegate = SessionDelegate()
-        let configuration = URLSessionConfiguration.ephemeral
+        self.requestsUsePipelining = requestsUsePipelining
+        self.sessionDelegate = SessionDelegate()
         
-        session = URLSession(
-            configuration: configuration,
+        self.session = URLSession(
+            configuration: URLSessionConfiguration.ephemeral,
             delegate: sessionDelegate,
             delegateQueue: nil
         )
@@ -92,7 +87,6 @@ public class ImageDownloader: @unchecked Sendable  {
                 
                 let downloadTask = DownloadTask()
                 
-                // 객체를 생성, TaskCallback으로 래핑하여 add 메서드에 전달
                 let onCompleted = Delegate<DownloadResult, Void>()
                 
                 onCompleted.delegate(on: self) { (self, result) in
@@ -114,6 +108,7 @@ public class ImageDownloader: @unchecked Sendable  {
                 let sessionDataTask = session.dataTask(with: context.request)
                 let onCompleted = Delegate<DownloadResult, Void>()
                 let callback = SessionDataTask.TaskCallback(onCompleted: onCompleted)
+                
                 let downloadTask = sessionDelegate.add(sessionDataTask, url: context.url, callback: callback)
                 Task {
                    await downloadTask.sessionTask?.onTaskDone.delegate(on: self) { (_, values) in
@@ -143,6 +138,7 @@ public class ImageDownloader: @unchecked Sendable  {
                         }
                     }
                 }
+                
                 onCompleted.delegate(on: self) { (self, result) in
                     switch result {
                     case .success(let imageResult):
@@ -152,14 +148,13 @@ public class ImageDownloader: @unchecked Sendable  {
                     }
                 }
                 
-                // 다운로드 시작
                 sessionDataTask.resume()
             }
         }
     }
     
     @discardableResult
-    open func downloadImageData(with url: URL) async throws -> Data {
+    public func downloadImageData(with url: URL) async throws -> Data {
         let downloadTask = DownloadTask()
     
         let context = try await createDownloadContext(with: url)
@@ -184,16 +179,6 @@ public class ImageDownloader: @unchecked Sendable  {
         }
         
         return ImageLoadingResult(image: image, url: url, originalData: imageData)
-    }
-    
-    /// Cancel all downloading tasks for a given URL.
-    public func cancel(url: URL) {
-        taskManager.cancel(url: url)
-    }
-    
-    /// Cancel all downloading tasks.
-    public func cancelAll() {
-        taskManager.cancelAll()
     }
 }
 

@@ -8,8 +8,6 @@ public actor DiskStorage<T: DataTransformable> {
     
     var maybeCached : Set<String>?
     
-    let metaChangingQueue: DispatchQueue
-    
     // MARK: - Lifecycle
     
     init (
@@ -23,8 +21,6 @@ public actor DiskStorage<T: DataTransformable> {
         let cacheName = "com.neon.NeoImage.ImageCache.\(name)"
         
         directoryURL = url.appendingPathComponent(cacheName, isDirectory: true)
-        
-        metaChangingQueue = DispatchQueue(label: cacheName)
         
         Task {
             await setupCacheChecking()
@@ -102,15 +98,9 @@ public actor DiskStorage<T: DataTransformable> {
         
         if !actuallyLoad { return T.empty }
         
-        // 파일에서 데이터를 읽어옴
         let data = try Data(contentsOf: fileURL)
-        
-        // DataTransformable 프로토콜의 fromData를 사용해 원본 타입으로 변환
         let obj = try T.fromData(data)
         
-        // 해당 파일이 조회되었기 때문에, 만료 시간 연장을 처리합니다.
-        // "캐시 적중(Cache Hit)"이 발생했을 때 해당 데이터의 생명주기를 연장하는 일반적인 캐시 전략입니다.
-        // LRU(Least Recently Used)
         if extendingExpiration != .none {
             let expirationDate: Date
             switch extendingExpiration {
@@ -123,14 +113,12 @@ public actor DiskStorage<T: DataTransformable> {
                 expirationDate = storageExpiration.estimatedExpirationSinceNow
             }
             
-            metaChangingQueue.async {
-                let attributes: [FileAttributeKey: Any] = [
-                    .creationDate: Date(),
-                    .modificationDate: expirationDate,
-                ]
-                
-                try? FileManager.default.setAttributes(attributes, ofItemAtPath: fileURL.path)
-            }
+            let attributes: [FileAttributeKey: Any] = [
+                .creationDate: Date(),
+                .modificationDate: expirationDate,
+            ]
+            
+            try? FileManager.default.setAttributes(attributes, ofItemAtPath: fileURL.path)
         }
         
         return obj

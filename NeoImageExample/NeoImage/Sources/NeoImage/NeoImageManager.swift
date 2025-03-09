@@ -1,30 +1,12 @@
 import Foundation
 import UIKit
 
-public final class NeoImageManager: @unchecked Sendable {
-    private let propertyQueue = DispatchQueue(label: "com.neon.NeoImage.NeoImageManagerPropertyQueue")
-    
+public final class NeoImageManager: Sendable {
     /// NeoImage 전체에서 사용되는 공유 매니저 인스턴스
     public static let shared = NeoImageManager()
     
-    private var _cache: ImageCache
-    /// 이 매니저가 사용하는 ImageCache
-    public var cache: ImageCache {
-        get { propertyQueue.sync { _cache } }
-        set { propertyQueue.sync { _cache = newValue } }
-    }
-    
-    private var _downloader: ImageDownloader
-    /// 이 매니저가 사용하는 ImageDownloader
-    public var downloader: ImageDownloader {
-        get { propertyQueue.sync { _downloader } }
-        set { propertyQueue.sync { _downloader = newValue } }
-    }
-    
-    /// 매니저에서 사용할 기본 옵션
-    public var defaultOptions = NeoImageOptions.default
-    
-    private let processingQueue: DispatchQueue
+    public let cache: ImageCache
+    public let downloader: ImageDownloader
     
     // MARK: - Initialization
     
@@ -33,11 +15,8 @@ public final class NeoImageManager: @unchecked Sendable {
         downloader: ImageDownloader = .default,
         cache: ImageCache = ImageCache(name: "default")
     ) {
-        _downloader = downloader
-        _cache = cache
-        
-        let processQueueName = "com.neon.NeoImage.NeoImageManager.processQueue.\(UUID().uuidString)"
-        processingQueue = DispatchQueue(label: processQueueName)
+        self.downloader = downloader
+        self.cache = cache
     }
     
     // MARK: - Image Downloading
@@ -87,16 +66,5 @@ public final class NeoImageManager: @unchecked Sendable {
         }
         
         return result
-    }
-    
-    /// 이미지 다운로드 작업을 취소합니다.
-    /// - Parameter url: 취소할 다운로드 작업의 URL
-    public func cancelDownload(for url: URL) {
-        downloader.cancel(url: url)
-    }
-    
-    /// 모든 다운로드 작업을 취소합니다.
-    public func cancelAllDownloads() {
-        downloader.cancelAll()
     }
 }
